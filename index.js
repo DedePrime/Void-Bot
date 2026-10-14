@@ -1,6 +1,6 @@
 'use strict';
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -95,13 +95,5 @@ if (!token) {
   console.error('[Void Bot] ERRORE: DISCORD_TOKEN mancante.');
   process.exit(1);
 }
-
-client.once('clientReady', () => {
-  console.log(`[Void Bot] Logged in as ${client.user.tag}`);
-  client.user.setPresence({
-    activities: [{ name: '/help • VoidUtility', type: ActivityType.Watching }],
-    status: 'online'
-  });
-});
 
 client.login(token);
