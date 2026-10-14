@@ -1,0 +1,11 @@
+{
+  "brandName": "VoidUtility",
+  "brandColor": "#8B5CF6",
+  "brandFooter": "VoidUtility • License System",
+  "licensePrefix": "VOID",
+  "licenseFormat": "VOID-XXXX-XXXX-XXXX-XXXX",
+  "logoUrl": "https://i.imgur.com/YOUR_LOGO.png",
+  "websiteUrl": "https://voidutility.example.com",
+  "supportDiscord": "https://discord.gg/yourserver",
+  "licenseDurationDays": 30
+}

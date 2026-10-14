@@ -1,0 +1,16 @@
+{
+  "name": "voidutility-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for VoidUtility license management",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  }
+}
