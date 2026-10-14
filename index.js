@@ -2,7 +2,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, ActivityType } = require('discord.js');
 const http = require('http');
-const wokeDyno = require('woke-dyno');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,13 +9,10 @@ const config = require('./config.json');
 
 // ── Configurazione Porta (Render la fornisce dinamicamente) ──
 const PORT = process.env.PORT || 3000;
-const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds
-    // Non serve altro per gli slash commands!
-    // GuildMembers e MessageContent richiedono privileged intents
   ]
 });
 
@@ -93,17 +89,10 @@ if (!token) {
 
 client.once('clientReady', () => {
   console.log(`[Void Bot] Logged in as ${client.user.tag}`);
-
-  // Avvia il keep-alive di Render
-  if (process.env.NODE_ENV === 'production' || SELF_URL.includes('onrender.com')) {
-    try {
-      const dynoWaker = wokeDyno(SELF_URL);
-      dynoWaker.start();
-      console.log(`[Void Bot] Keep-alive attivato per ${SELF_URL}`);
-    } catch (e) {
-      console.warn('[Void Bot] Keep-alive non avviato:', e.message);
-    }
-  }
+  client.user.setPresence({
+    activities: [{ name: '/help • VoidUtility', type: ActivityType.Watching }],
+    status: 'online'
+  });
 });
 
 client.login(token);
