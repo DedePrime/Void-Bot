@@ -7,9 +7,10 @@ const path = require('path');
 
 const config = require('./config.json');
 
-// ── Configurazione Porta (Render la fornisce dinamicamente) ──
+// ── Porta dinamica di Render ────────────────────────────
 const PORT = process.env.PORT || 3000;
 
+// ── Client Discord ──────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds
@@ -25,12 +26,16 @@ if (fs.existsSync(commandsPath)) {
   const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
   for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-    if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
-      console.log(`[Void Bot] Loaded command: ${command.data.name}`);
-    } else {
-      console.warn(`[Void Bot] Command at ${filePath} missing "data" or "execute"`);
+    try {
+      const command = require(filePath);
+      if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+        console.log(`[Void Bot] Loaded command: ${command.data.name}`);
+      } else {
+        console.warn(`[Void Bot] Command at ${filePath} missing "data" or "execute"`);
+      }
+    } catch (err) {
+      console.error(`[Void Bot] Failed to load ${file}:`, err.message);
     }
   }
 }
@@ -41,29 +46,33 @@ if (fs.existsSync(eventsPath)) {
   const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
   for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
-    if (event.once) {
-      client.once(event.name, (...args) => event.execute(...args, client));
-    } else {
-      client.on(event.name, (...args) => event.execute(...args, client));
+    try {
+      const event = require(filePath);
+      if (event.once) {
+        client.once(event.name, (...args) => event.execute(...args, client));
+      } else {
+        client.on(event.name, (...args) => event.execute(...args, client));
+      }
+      console.log(`[Void Bot] Loaded event: ${event.name}`);
+    } catch (err) {
+      console.error(`[Void Bot] Failed to load event ${file}:`, err.message);
     }
-    console.log(`[Void Bot] Loaded event: ${event.name}`);
   }
 }
 
-// ── Server HTTP per Health Check (Render) ────────────────
+// ── Health check HTTP server (per Render + UptimeRobot) ─
 const server = http.createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'healthy',
-      uptime: process.uptime(),
+      uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
       bot: client.user ? client.user.tag : 'starting'
     }));
   } else {
-    res.writeHead(404);
-    res.end();
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
   }
 });
 
@@ -73,17 +82,17 @@ server.listen(PORT, () => {
 
 // ── Errori globali ─────────────────────────────────────
 process.on('unhandledRejection', (err) => {
-  console.error('[Void Bot] Unhandled rejection:', err.message || err);
+  console.error('[Void Bot] Unhandled rejection:', err?.message || err);
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[Void Bot] Uncaught exception:', err.message || err);
+  console.error('[Void Bot] Uncaught exception:', err?.message || err);
 });
 
 // ── Login ──────────────────────────────────────────────
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
-  console.error('[Void Bot] ERRORE: DISCORD_TOKEN mancante nel file .env');
+  console.error('[Void Bot] ERRORE: DISCORD_TOKEN mancante.');
   process.exit(1);
 }
 
