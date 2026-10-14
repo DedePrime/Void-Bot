@@ -7,7 +7,11 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const LICENSES_FILE = path.join(DATA_DIR, 'licenses.json');
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.error('[API] Errore creazione cartella data:', e.message);
+  }
 }
 
 function loadLicenses() {
@@ -16,26 +20,29 @@ function loadLicenses() {
     if (fs.existsSync(LICENSES_FILE)) {
       return JSON.parse(fs.readFileSync(LICENSES_FILE, 'utf8'));
     }
-  } catch {}
+  } catch (e) {
+    console.error('[API] Errore lettura licenze:', e.message);
+  }
   return { licenses: [], history: [] };
 }
 
 function saveLicenses(data) {
   ensureDataDir();
-  fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(LICENSES_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[API] Errore scrittura licenze:', e.message);
+  }
 }
 
-// ── Genera key casuale ─────────────────────────────────
 function generateKey() {
   const segment = () => crypto.randomBytes(2).toString('hex').toUpperCase();
   return `VOID-${segment()}-${segment()}-${segment()}-${segment()}`;
 }
 
-// ── Crea nuova licenza ─────────────────────────────────
 function createLicense({ userId, username, durationDays = 30, tier = 'standard' }) {
   const data = loadLicenses();
 
-  // Verifica se l'utente ha già una licenza attiva
   const existing = data.licenses.find(l =>
     l.userId === userId && l.active && l.expiresAt > Date.now()
   );
@@ -69,7 +76,6 @@ function createLicense({ userId, username, durationDays = 30, tier = 'standard' 
   return { ok: true, license };
 }
 
-// ── Verifica/licenza ───────────────────────────────────
 function verifyLicense(key) {
   const data = loadLicenses();
   const license = data.licenses.find(l => l.key === key);
@@ -83,7 +89,6 @@ function verifyLicense(key) {
   return { ok: true, license };
 }
 
-// ── Attiva licenza su HWID ─────────────────────────────
 function activateLicense(key, hwid, username) {
   const data = loadLicenses();
   const license = data.licenses.find(l => l.key === key);
@@ -106,7 +111,6 @@ function activateLicense(key, hwid, username) {
   return { ok: true, license };
 }
 
-// ── Reset HWID ─────────────────────────────────────────
 function resetHwid(key) {
   const data = loadLicenses();
   const license = data.licenses.find(l => l.key === key);
@@ -120,7 +124,6 @@ function resetHwid(key) {
   return { ok: true, license };
 }
 
-// ── Revoca licenza ─────────────────────────────────────
 function revokeLicense(key) {
   const data = loadLicenses();
   const license = data.licenses.find(l => l.key === key);
@@ -133,7 +136,6 @@ function revokeLicense(key) {
   return { ok: true, license };
 }
 
-// ── Statistiche ────────────────────────────────────────
 function getStats() {
   const data = loadLicenses();
   const now = Date.now();
@@ -151,13 +153,11 @@ function getStats() {
   };
 }
 
-// ── Trova licenza per utente ───────────────────────────
 function getUserLicense(userId) {
   const data = loadLicenses();
-  const userLicenses = data.licenses
+  return data.licenses
     .filter(l => l.userId === userId)
     .sort((a, b) => b.createdAt - a.createdAt);
-  return userLicenses;
 }
 
 module.exports = {
