@@ -1,9 +1,9 @@
 'use strict';
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const api = require('../utils/api.js');
-const { successEmbed, errorEmbed, warningEmbed, brandEmbed } = require('../utils/embed.js');
 const config = require('../config.json');
 
+// ── Verifica se l'utente è staff ────────────────────────
 function isStaff(interaction) {
   const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
   if (adminIds.includes(interaction.user.id)) return true;
@@ -12,6 +12,7 @@ function isStaff(interaction) {
   return false;
 }
 
+// ── Formattazione data ──────────────────────────────────
 function formatDate(ts) {
   return new Date(ts).toLocaleString('it-IT', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -19,25 +20,25 @@ function formatDate(ts) {
   });
 }
 
-function timeLeft(expiresAt) {
+// ── Tempo rimanente ─────────────────────────────────────
+function tempoRimanente(expiresAt) {
   const diff = expiresAt - Date.now();
   if (diff <= 0) return 'Scaduta';
-  const days = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days > 0) return `${days}g ${hours}h`;
-  return `${hours}h`;
+  const g = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  return g > 0 ? `${g}g ${h}h` : `${h}h`;
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('license')
-    .setDescription('Gestione licenze VoidUtility')
+    .setDescription('🎫 Gestione licenze VoidUtility')
     .addSubcommand(sub => sub
       .setName('create')
       .setDescription('Crea una nuova licenza (staff)')
-      .addUserOption(o => o.setName('user').setDescription('Utente a cui assegnare la licenza').setRequired(true))
-      .addIntegerOption(o => o.setName('days').setDescription('Durata in giorni (default: 30)').setMinValue(1).setMaxValue(3650))
-      .addStringOption(o => o.setName('tier').setDescription('Tier della licenza').addChoices(
+      .addUserOption(o => o.setName('utente').setDescription('Utente a cui assegnare la licenza').setRequired(true))
+      .addIntegerOption(o => o.setName('giorni').setDescription('Durata in giorni (default: 30)').setMinValue(1).setMaxValue(3650).setRequired(false))
+      .addStringOption(o => o.setName('tier').setDescription('Tier della licenza').setRequired(false).addChoices(
         { name: 'Standard', value: 'standard' },
         { name: 'Premium', value: 'premium' },
         { name: 'Lifetime', value: 'lifetime' }
@@ -65,163 +66,295 @@ module.exports = {
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
+    console.log(`[License] Sub-comando: ${sub} da ${interaction.user.tag}`);
 
-    // ── CREATE ─────────────────────────────────────────
+    // ═══════════════════════════════════════════════════
+    //  CREATE
+    // ═══════════════════════════════════════════════════
     if (sub === 'create') {
-      if (!isStaff(interaction)) {
-        return interaction.reply({ embeds: [errorEmbed('Permesso negato', 'Solo lo staff può creare licenze.')], ephemeral: true });
-      }
-
-      const target = interaction.options.getUser('user');
-      const days = interaction.options.getInteger('days') || config.licenseDurationDays;
-      const tier = interaction.options.getString('tier') || 'standard';
-
-      await interaction.deferReply({ ephemeral: true });
-
-      const result = api.createLicense({
-        userId: target.id,
-        username: target.username,
-        durationDays: days,
-        tier
-      });
-
-      if (!result.ok) {
-        return interaction.editReply({ embeds: [warningEmbed('Licenza esistente', result.msg)] });
-      }
-
-      const lic = result.license;
-      const embed = successEmbed('Licenza creata!', `Licenza generata con successo per <@${target.id}>.`)
-        .addFields(
-          { name: '🔑 Key', value: `\`\`\`${lic.key}\`\`\``, inline: false },
-          { name: '👤 Utente', value: `<@${target.id}>`, inline: true },
-          { name: '⏱️ Durata', value: `${lic.durationDays} giorni`, inline: true },
-          { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
-          { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: false }
-        );
-
-      await interaction.editReply({ embeds: [embed] });
-
-      // DM all'utente
       try {
-        const dmEmbed = brandEmbed(
-          `🎉 Hai ricevuto una licenza ${config.brandName}!`,
-          `Ciao <@${target.id}>, ecco la tua chiave di licenza personale.`
-        )
-        .addFields(
-          { name: '🔑 La tua key', value: `\`\`\`${lic.key}\`\`\``, inline: false },
-          { name: '⏱️ Durata', value: `${lic.durationDays} giorni`, inline: true },
-          { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
-          { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: false }
-        )
-        .setFooter({ text: `Non condividere questa key con nessuno!` });
+        console.log('[License/Create] ▶ Inizio');
+        console.log('[License/Create] User ID:', interaction.user.id);
+        console.log('[License/Create] Admin IDs configurati:', process.env.ADMIN_IDS);
+        console.log('[License/Create] Role staff configurato:', process.env.ROLE_STAFF);
 
-        await target.send({ embeds: [dmEmbed] });
-      } catch {
-        // DM chiusi, ignora
+        if (!isStaff(interaction)) {
+          console.log('[License/Create] ❌ Permesso negato');
+          return interaction.reply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Permesso negato').setDescription('Solo lo **staff** può creare licenze.')],
+            ephemeral: true
+          });
+        }
+        console.log('[License/Create] ✅ Staff verificato');
+
+        const target = interaction.options.getUser('utente');
+        const giorni = interaction.options.getInteger('giorni') || config.licenseDurationDays || 30;
+        const tier = interaction.options.getString('tier') || 'standard';
+
+        console.log('[License/Create] Target:', target.id, target.tag);
+        console.log('[License/Create] Giorni:', giorni, '| Tier:', tier);
+
+        await interaction.deferReply({ ephemeral: true });
+        console.log('[License/Create] DeferReply OK');
+
+        let result;
+        try {
+          result = api.createLicense({
+            userId: target.id,
+            username: target.username,
+            durationDays: giorni,
+            tier
+          });
+          console.log('[License/Create] Result:', JSON.stringify(result));
+        } catch (apiErr) {
+          console.error('[License/Create] ❌ api.createLicense error:', apiErr.message);
+          console.error(apiErr.stack);
+          return interaction.editReply({
+            embeds: [new EmbedBuilder()
+              .setColor(0xEF4444)
+              .setTitle('❌ Errore interno')
+              .setDescription(`\`\`\`${apiErr.message}\`\`\``)
+            ]
+          });
+        }
+
+        if (!result.ok) {
+          console.log('[License/Create] ⚠️ Licenza esistente');
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0xF59E0B).setTitle('⚠️ Licenza esistente').setDescription(result.msg || 'Utente ha già una licenza attiva.')]
+          });
+        }
+
+        const lic = result.license;
+        console.log('[License/Create] ✅ Licenza creata:', lic.key);
+
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0x10B981)
+            .setTitle('✅ Licenza creata!')
+            .setDescription(`Licenza generata per <@${target.id}>.`)
+            .addFields(
+              { name: '🔑 Key', value: `\`\`\`${lic.key}\`\`\``, inline: false },
+              { name: '👤 Utente', value: `<@${target.id}>`, inline: true },
+              { name: '⏱️ Durata', value: `${lic.durationDays} giorni`, inline: true },
+              { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
+              { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: false }
+            )
+            .setTimestamp()
+          ]
+        });
+        console.log('[License/Create] ✅ Reply inviata');
+
+        // DM all'utente
+        try {
+          await target.send({
+            embeds: [new EmbedBuilder()
+              .setColor(0x8B5CF6)
+              .setTitle(`🎉 Hai ricevuto una licenza ${config.brandName}!`)
+              .setDescription('Ecco la tua chiave personale. **Non condividerla con nessuno!**')
+              .addFields(
+                { name: '🔑 Key', value: `\`\`\`${lic.key}\`\`\``, inline: false },
+                { name: '⏱️ Durata', value: `${lic.durationDays} giorni`, inline: true },
+                { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
+                { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: false }
+              )
+              .setTimestamp()
+            ]
+          });
+          console.log('[License/Create] ✅ DM inviato a', target.tag);
+        } catch (dmErr) {
+          console.log('[License/Create] ⚠️ DM non inviato:', dmErr.message);
+        }
+
+        return;
+      } catch (err) {
+        console.error('[License/Create] ❌❌ ERRORE GENERALE:', err.message);
+        console.error(err.stack);
+        try {
+          if (interaction.deferred) {
+            await interaction.editReply({
+              embeds: [new EmbedBuilder()
+                .setColor(0xEF4444)
+                .setTitle('❌ Errore')
+                .setDescription(`\`\`\`${err.message}\`\`\``)
+              ]
+            });
+          } else {
+            await interaction.reply({
+              embeds: [new EmbedBuilder()
+                .setColor(0xEF4444)
+                .setTitle('❌ Errore')
+                .setDescription(`\`\`\`${err.message}\`\`\``)
+              ],
+              ephemeral: true
+            });
+          }
+        } catch (replyErr) {
+          console.error('[License/Create] ❌ Anche la reply è fallita:', replyErr.message);
+        }
+        return;
       }
-      return;
     }
 
-    // ── VERIFY ─────────────────────────────────────────
+    // ═══════════════════════════════════════════════════
+    //  VERIFY
+    // ═══════════════════════════════════════════════════
     if (sub === 'verify') {
-      const key = interaction.options.getString('key').trim().toUpperCase();
+      try {
+        const key = interaction.options.getString('key').trim().toUpperCase();
+        await interaction.deferReply({ ephemeral: true });
 
-      await interaction.deferReply({ ephemeral: true });
+        const result = api.verifyLicense(key);
+        if (!result.ok) {
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Licenza non valida').setDescription(result.msg)]
+          });
+        }
 
-      const result = api.verifyLicense(key);
-      if (!result.ok) {
-        return interaction.editReply({ embeds: [errorEmbed('Licenza non valida', result.msg)] });
-      }
-
-      const lic = result.license;
-      const embed = successEmbed('Licenza valida!', 'La licenza è attiva e funzionante.')
-        .addFields(
-          { name: '🔑 Key', value: `\`${lic.key}\``, inline: false },
-          { name: '👤 Proprietario', value: `<@${lic.userId}>`, inline: true },
-          { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
-          { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: true },
-          { name: '⏱️ Tempo rimasto', value: timeLeft(lic.expiresAt), inline: true },
-          { name: '💻 HWID', value: lic.hwid ? `\`${lic.hwid.slice(0, 16)}...\`` : '*Non attivata*', inline: true }
-        );
-
-      return interaction.editReply({ embeds: [embed] });
-    }
-
-    // ── MY ─────────────────────────────────────────────
-    if (sub === 'my') {
-      await interaction.deferReply({ ephemeral: true });
-
-      const licenses = api.getUserLicense(interaction.user.id);
-      if (licenses.length === 0) {
+        const lic = result.license;
         return interaction.editReply({
-          embeds: [warningEmbed('Nessuna licenza', 'Non hai ancora nessuna licenza VoidUtility registrata.')]
+          embeds: [new EmbedBuilder()
+            .setColor(0x10B981)
+            .setTitle('✅ Licenza valida!')
+            .addFields(
+              { name: '🔑 Key', value: `\`${lic.key}\``, inline: false },
+              { name: '👤 Proprietario', value: `<@${lic.userId}>`, inline: true },
+              { name: '⭐ Tier', value: lic.tier.toUpperCase(), inline: true },
+              { name: '📅 Scade il', value: formatDate(lic.expiresAt), inline: true },
+              { name: '⏱️ Tempo rimasto', value: tempoRimanente(lic.expiresAt), inline: true },
+              { name: '💻 HWID', value: lic.hwid ? `\`${lic.hwid.slice(0, 16)}...\`` : '*Non attivata*', inline: true }
+            )
+            .setTimestamp()
+          ]
+        });
+      } catch (err) {
+        console.error('[License/Verify] Errore:', err.message);
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(err.message)]
         });
       }
-
-      const embed = brandEmbed('🎫 Le tue licenze', `Hai **${licenses.length}** licenza/e registrate.`)
-        .setThumbnail(interaction.user.displayAvatarURL());
-
-      licenses.slice(0, 5).forEach((lic, i) => {
-        const status = !lic.active ? '❌ Disattivata'
-          : lic.expiresAt < Date.now() ? '⌛ Scaduta'
-          : '✅ Attiva';
-
-        embed.addFields({
-          name: `#${i + 1} — ${lic.key}`,
-          value: [
-            `**Stato:** ${status}`,
-            `**Tier:** ${lic.tier.toUpperCase()}`,
-            `**Creata:** ${formatDate(lic.createdAt)}`,
-            `**Scade:** ${formatDate(lic.expiresAt)}`,
-            `**Rimane:** ${timeLeft(lic.expiresAt)}`
-          ].join('\n'),
-          inline: false
-        });
-      });
-
-      if (licenses.length > 5) {
-        embed.setFooter({ text: `Mostrate 5 di ${licenses.length} licenze.` });
-      }
-
-      return interaction.editReply({ embeds: [embed] });
     }
 
-    // ── REVOKE ─────────────────────────────────────────
+    // ═══════════════════════════════════════════════════
+    //  MY
+    // ═══════════════════════════════════════════════════
+    if (sub === 'my') {
+      try {
+        await interaction.deferReply({ ephemeral: true });
+
+        const licenze = api.getUserLicense(interaction.user.id);
+        if (licenze.length === 0) {
+          return interaction.editReply({
+            embeds: [new EmbedBuilder()
+              .setColor(0xF59E0B)
+              .setTitle('⚠️ Nessuna licenza')
+              .setDescription('Non hai ancora nessuna licenza VoidUtility.')
+            ]
+          });
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(0x8B5CF6)
+          .setTitle('🎫 Le tue licenze')
+          .setDescription(`Hai **${licenze.length}** licenza/e registrate.`)
+          .setThumbnail(interaction.user.displayAvatarURL())
+          .setTimestamp();
+
+        licenze.slice(0, 5).forEach((lic, i) => {
+          const stato = !lic.active ? '❌ Disattivata'
+            : lic.expiresAt < Date.now() ? '⌛ Scaduta'
+            : '✅ Attiva';
+
+          embed.addFields({
+            name: `#${i + 1} — ${lic.key}`,
+            value: [
+              `**Stato:** ${stato}`,
+              `**Tier:** ${lic.tier.toUpperCase()}`,
+              `**Creata:** ${formatDate(lic.createdAt)}`,
+              `**Scade:** ${formatDate(lic.expiresAt)}`,
+              `**Rimane:** ${tempoRimanente(lic.expiresAt)}`
+            ].join('\n'),
+            inline: false
+          });
+        });
+
+        if (licenze.length > 5) {
+          embed.setFooter({ text: `Mostrate 5 di ${licenze.length} licenze.` });
+        }
+
+        return interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error('[License/My] Errore:', err.message);
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(err.message)]
+        });
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  REVOKE
+    // ═══════════════════════════════════════════════════
     if (sub === 'revoke') {
-      if (!isStaff(interaction)) {
-        return interaction.reply({ embeds: [errorEmbed('Permesso negato', 'Solo lo staff può revocare licenze.')], ephemeral: true });
+      try {
+        if (!isStaff(interaction)) {
+          return interaction.reply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Permesso negato').setDescription('Solo lo **staff** può revocare licenze.')],
+            ephemeral: true
+          });
+        }
+
+        const key = interaction.options.getString('key').trim().toUpperCase();
+        await interaction.deferReply({ ephemeral: true });
+
+        const result = api.revokeLicense(key);
+        if (!result.ok) {
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(result.msg)]
+          });
+        }
+
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0x10B981).setTitle('✅ Licenza revocata').setDescription(`La licenza \`${key}\` è stata disattivata.`)]
+        });
+      } catch (err) {
+        console.error('[License/Revoke] Errore:', err.message);
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(err.message)]
+        });
       }
-
-      const key = interaction.options.getString('key').trim().toUpperCase();
-      await interaction.deferReply({ ephemeral: true });
-
-      const result = api.revokeLicense(key);
-      if (!result.ok) {
-        return interaction.editReply({ embeds: [errorEmbed('Errore', result.msg)] });
-      }
-
-      return interaction.editReply({
-        embeds: [successEmbed('Licenza revocata', `La licenza \`${key}\` è stata disattivata.`)]
-      });
     }
 
-    // ── RESET HWID ─────────────────────────────────────
+    // ═══════════════════════════════════════════════════
+    //  RESET HWID
+    // ═══════════════════════════════════════════════════
     if (sub === 'reset-hwid') {
-      if (!isStaff(interaction)) {
-        return interaction.reply({ embeds: [errorEmbed('Permesso negato', 'Solo lo staff può resettare HWID.')], ephemeral: true });
+      try {
+        if (!isStaff(interaction)) {
+          return interaction.reply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Permesso negato').setDescription('Solo lo **staff** può resettare HWID.')],
+            ephemeral: true
+          });
+        }
+
+        const key = interaction.options.getString('key').trim().toUpperCase();
+        await interaction.deferReply({ ephemeral: true });
+
+        const result = api.resetHwid(key);
+        if (!result.ok) {
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(result.msg)]
+          });
+        }
+
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0x10B981).setTitle('✅ HWID resettato').setDescription(`La licenza \`${key}\` può essere riattivata su un altro PC.`)]
+        });
+      } catch (err) {
+        console.error('[License/ResetHwid] Errore:', err.message);
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xEF4444).setTitle('❌ Errore').setDescription(err.message)]
+        });
       }
-
-      const key = interaction.options.getString('key').trim().toUpperCase();
-      await interaction.deferReply({ ephemeral: true });
-
-      const result = api.resetHwid(key);
-      if (!result.ok) {
-        return interaction.editReply({ embeds: [errorEmbed('Errore', result.msg)] });
-      }
-
-      return interaction.editReply({
-        embeds: [successEmbed('HWID resettato', `La licenza \`${key}\` può ora essere riattivata su un altro PC.`)]
-      });
     }
   }
 };
