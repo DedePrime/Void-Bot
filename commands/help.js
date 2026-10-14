@@ -37,10 +37,10 @@ module.exports = {
         name: '🛡️ Moderazione (solo staff)',
         value: [
           '`/serverstats` — 📊 Statistiche dettagliate server',
-          '`/ban <user> [reason] [delete_days]` — 🔨 Banna utente',
-          '`/unban <user_id> [reason]` — 🔓 Sbanna utente',
-          '`/kick <user> [reason]` — 👢 Espelli utente',
-          '`/warn add <user> <reason>` — ⚠️ Avvisa utente',
+          '`/ban <user> [motivo] [giorni]` — 🔨 Banna utente',
+          '`/unban <user_id> [motivo]` — 🔓 Sbanna utente',
+          '`/kick <user> [motivo]` — 👢 Espelli utente',
+          '`/warn add <user> <motivo>` — ⚠️ Avvisa utente',
           '`/warn list <user>` — 📋 Lista warning',
           '`/warn clear <user>` — 🧹 Rimuovi warning',
           '`/stats` — 📈 Statistiche licenze'
